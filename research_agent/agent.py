@@ -197,32 +197,85 @@ class PerplexityResearchAgent:
         """Extract source URLs and citations from Perplexity response"""
         sources = []
         
-        # Look for URLs
-        url_pattern = r'https?://[^\s\)]+[^\s\.\,\)\]]'
-        urls = re.findall(url_pattern, content)
-        sources.extend(urls)
-        
-        # Look for citation patterns like [1], (Source: ...), etc.
-        citation_patterns = [
-            r'\[(\d+)\]',
-            r'Source:\s*([^,\n]+)',
-            r'According to\s+([^,\n]+)',
-            r'(?:via|from)\s+([A-Z][^,\n]{10,50})'
+        # Enhanced URL pattern to capture full URLs
+        url_patterns = [
+            r'https?://[^\s\)\]\}\>]+(?:[^\s\.\,\)\]\}\>])',  # Standard URLs
+            r'(?:Source|Retrieved from|Available at|See):\s*(https?://[^\s\)\]\}\>]+)',  # Labeled URLs
+            r'\[(?:Source|Ref|Link)\]\(([^\)]+)\)',  # Markdown-style links
         ]
         
-        for pattern in citation_patterns:
+        for pattern in url_patterns:
+            urls = re.findall(pattern, content, re.IGNORECASE)
+            sources.extend(urls)
+        
+        # Extract domain-based sources from content
+        domain_patterns = [
+            r'According to ([A-Za-z0-9]+(?:\.[A-Za-z]{2,})+)',  # Domain references
+            r'([A-Za-z0-9]+(?:\.[A-Za-z]{2,})+) reports?',  # Site reports
+            r'Study by ([A-Za-z0-9]+(?:\.[A-Za-z]{2,})+)',  # Study sources
+            r'([A-Za-z0-9]+(?:\.[A-Za-z]{2,})+) research',  # Research sources
+        ]
+        
+        for pattern in domain_patterns:
+            domains = re.findall(pattern, content, re.IGNORECASE)
+            # Convert domains to URLs
+            for domain in domains:
+                if not domain.startswith(('http://', 'https://')):
+                    sources.append(f'https://{domain}')
+                else:
+                    sources.append(domain)
+        
+        # Look for organization/publication names that could be sources
+        source_patterns = [
+            r'McKinsey[^,\n]*',
+            r'Deloitte[^,\n]*',
+            r'Boston Consulting Group[^,\n]*',
+            r'BCG[^,\n]*',
+            r'Gartner[^,\n]*',
+            r'Forrester[^,\n]*',
+            r'PwC[^,\n]*',
+            r'Harvard Business Review[^,\n]*',
+            r'MIT[^,\n]*study',
+            r'Stanford[^,\n]*',
+            r'(?:The\s+)?(?:Wall Street Journal|WSJ)[^,\n]*',
+            r'(?:The\s+)?New York Times[^,\n]*',
+            r'(?:The\s+)?Financial Times[^,\n]*',
+            r'Forbes[^,\n]*',
+            r'Bloomberg[^,\n]*',
+            r'Reuters[^,\n]*',
+            r'TechCrunch[^,\n]*',
+            r'Wired[^,\n]*',
+            r'(?:The\s+)?Economist[^,\n]*'
+        ]
+        
+        for pattern in source_patterns:
             matches = re.findall(pattern, content, re.IGNORECASE)
-            sources.extend(matches)
+            sources.extend([match.strip() for match in matches])
         
         # Clean and deduplicate sources
         cleaned_sources = []
+        seen = set()
+        
         for source in sources:
             if isinstance(source, str):
-                source = source.strip().rstrip('.,)')
-                if len(source) > 5 and source not in cleaned_sources:
-                    cleaned_sources.append(source)
+                # Clean source
+                source = source.strip().rstrip('.,)]}').strip()
+                
+                # Skip if too short or already seen
+                if len(source) <= 5 or source.lower() in seen:
+                    continue
+                
+                # Validate URLs
+                if source.startswith(('http://', 'https://')):
+                    # Remove fragments and clean URL
+                    source = re.sub(r'#[^\s]*$', '', source)
+                    source = re.sub(r'\?[^\s]*$', '', source)
+                    
+                # Add to cleaned sources
+                cleaned_sources.append(source)
+                seen.add(source.lower())
         
-        return cleaned_sources[:10]  # Limit to 10 sources
+        return cleaned_sources[:15]  # Increased limit to 15 sources
     
     async def conduct_research(self, outline_content: str) -> Dict[str, Any]:
         """Main research function - extract queries and get results"""

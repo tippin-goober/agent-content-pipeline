@@ -194,6 +194,108 @@ class CitationAgent:
         
         return keywords
     
+    def _select_best_source(self, sources: List[str]) -> Optional[str]:
+        """Select the best source from a list (prefer URLs over text snippets)"""
+        urls = []
+        organizations = []
+        other_sources = []
+        
+        for source in sources:
+            if source.startswith(('http://', 'https://')):
+                urls.append(source)
+            elif any(org in source.lower() for org in [
+                'mckinsey', 'deloitte', 'bcg', 'boston consulting', 'gartner', 
+                'forrester', 'pwc', 'harvard', 'mit', 'stanford', 'wsj', 
+                'wall street', 'new york times', 'financial times', 'forbes', 
+                'bloomberg', 'reuters', 'techcrunch', 'wired', 'economist'
+            ]):
+                organizations.append(source)
+            else:
+                other_sources.append(source)
+        
+        # Prefer URLs, then known organizations, then other sources
+        if urls:
+            return urls[0]
+        elif organizations:
+            return organizations[0]
+        elif other_sources:
+            return other_sources[0]
+        
+        return None
+    
+    def _extract_source_from_text(self, text: str) -> Optional[str]:
+        """Extract source information from text content"""
+        # Look for URLs in text
+        url_pattern = r'https?://[^\s\)]+[^\s\.\,\)\]]'
+        urls = re.findall(url_pattern, text)
+        if urls:
+            return urls[0]
+        
+        # Look for organization mentions
+        org_patterns = [
+            r'(?:according to |source: |via |from )?([A-Za-z\s]+(?:McKinsey|Deloitte|BCG|Boston Consulting|Gartner|Forrester|PwC|Harvard|MIT|Stanford))[^,\n.]*',
+            r'(?:according to |source: |via |from )?([A-Za-z\s]*(?:Wall Street Journal|WSJ|New York Times|Financial Times|Forbes|Bloomberg|Reuters|TechCrunch|Wired|Economist))[^,\n.]*'
+        ]
+        
+        for pattern in org_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                return matches[0].strip()
+        
+        return None
+    
+    def _clean_source_title(self, source: str) -> str:
+        """Clean and format source titles for citations"""
+        if not source:
+            return "Unknown Source"
+        
+        # Remove common URL artifacts
+        source = re.sub(r'^www\.', '', source)
+        source = re.sub(r'\.com$|\.org$|\.net$|\.edu$|\.gov$', '', source)
+        
+        # Handle domain-based sources
+        domain_mappings = {
+            'mckinsey': 'McKinsey & Company',
+            'deloitte': 'Deloitte',
+            'bcg': 'Boston Consulting Group',
+            'gartner': 'Gartner',
+            'forrester': 'Forrester Research',
+            'pwc': 'PricewaterhouseCoopers',
+            'harvard': 'Harvard Business Review',
+            'mit': 'MIT Technology Review',
+            'stanford': 'Stanford Research',
+            'wsj': 'Wall Street Journal',
+            'nytimes': 'New York Times',
+            'ft': 'Financial Times',
+            'forbes': 'Forbes',
+            'bloomberg': 'Bloomberg',
+            'reuters': 'Reuters',
+            'techcrunch': 'TechCrunch',
+            'wired': 'Wired',
+            'economist': 'The Economist'
+        }
+        
+        source_lower = source.lower()
+        for key, value in domain_mappings.items():
+            if key in source_lower:
+                return value
+        
+        # Capitalize first letters and clean up
+        words = source.replace('-', ' ').replace('_', ' ').split()
+        cleaned_words = []
+        
+        for word in words:
+            if len(word) > 2:  # Skip very short words
+                cleaned_words.append(word.capitalize())
+        
+        result = ' '.join(cleaned_words)
+        
+        # Fallback for very short or unclear sources
+        if len(result) < 3:
+            return "Industry Research"
+        
+        return result[:50]  # Limit length
+    
     def format_citations(self, matched_claims: List[Dict], research_data: Dict, style: str = "apa") -> Dict[str, Any]:
         """Format claims with citations and create bibliography"""
         citation_formatter = self.citation_styles.get(style, self.citation_styles[self.default_style])
@@ -238,94 +340,125 @@ class CitationAgent:
         }
     
     def _create_source_key(self, matched_source: Dict, research_data: Dict) -> Optional[str]:
-        """Create a unique key for a source"""
+        """Create a unique key for a source with improved URL extraction"""
         # Try to find the original source from research data
         for result in research_data.get('results', []):
             if 'answer' in result and matched_source['text'] in result['answer']:
                 sources = result.get('sources', [])
                 if sources:
-                    return sources[0]  # Use first source
+                    # Find the best source (prefer URLs)
+                    best_source = self._select_best_source(sources)
+                    if best_source:
+                        return best_source
+        
+        # Try to extract URLs or sources from the matched source text itself
+        extracted_source = self._extract_source_from_text(matched_source.get('text', ''))
+        if extracted_source:
+            return extracted_source
         
         # Fallback to research sources
         sources = research_data.get('sources', [])
         if sources:
-            return sources[0]
+            best_source = self._select_best_source(sources)
+            if best_source:
+                return best_source
         
-        # Generic source
-        return "Research Data"
+        # Last resort - create generic source with some context
+        source_type = matched_source.get('source_type', 'research')
+        if source_type == 'expert_quote':
+            return "Expert Industry Analysis"
+        elif source_type == 'research_statistic':
+            return "Industry Research Data"
+        else:
+            return "Market Research Report"
     
     def _format_apa_citation(self, source: str, citation_num: int) -> Dict[str, Any]:
-        """Format source in APA style"""
+        """Format source in APA style with improved title extraction"""
         if source.startswith('http'):
             # URL source
             parsed = urlparse(source)
             domain = parsed.netloc.replace('www.', '')
             
+            # Clean up domain name for better titles
+            clean_title = self._clean_source_title(domain)
+            
             return {
                 'id': citation_num,
                 'source': source,
-                'formatted': f"{domain.title()}. Retrieved {datetime.now().strftime('%B %d, %Y')}, from {source}",
+                'formatted': f"{clean_title}. Retrieved {datetime.now().strftime('%B %d, %Y')}, from {source}",
                 'url': source,
                 'accessed': datetime.now().strftime('%Y-%m-%d'),
-                'style': 'apa'
+                'style': 'apa',
+                'title': clean_title
             }
         else:
-            # Text source
+            # Text source - try to extract meaningful title
+            clean_title = self._clean_source_title(source)
+            
             return {
                 'id': citation_num,
                 'source': source,
-                'formatted': f"{source}. ({datetime.now().year}). Research data.",
+                'formatted': f"{clean_title}. ({datetime.now().year}). Industry research data.",
                 'url': None,
                 'accessed': datetime.now().strftime('%Y-%m-%d'),
-                'style': 'apa'
+                'style': 'apa',
+                'title': clean_title
             }
     
     def _format_mla_citation(self, source: str, citation_num: int) -> Dict[str, Any]:
-        """Format source in MLA style"""
+        """Format source in MLA style with improved title extraction"""
         if source.startswith('http'):
             parsed = urlparse(source)
             domain = parsed.netloc.replace('www.', '')
+            clean_title = self._clean_source_title(domain)
             
             return {
                 'id': citation_num,
                 'source': source,
-                'formatted': f'"{domain.title()}." Web. {datetime.now().strftime("%d %b %Y")}.',
+                'formatted': f'"{clean_title}." Web. {datetime.now().strftime("%d %b %Y")}.',
                 'url': source,
                 'accessed': datetime.now().strftime('%Y-%m-%d'),
-                'style': 'mla'
+                'style': 'mla',
+                'title': clean_title
             }
         else:
+            clean_title = self._clean_source_title(source)
             return {
                 'id': citation_num,
                 'source': source,
-                'formatted': f'"{source}." Research Data, {datetime.now().year}.',
+                'formatted': f'"{clean_title}." Industry Research, {datetime.now().year}.',
                 'url': None,
                 'accessed': datetime.now().strftime('%Y-%m-%d'),
-                'style': 'mla'
+                'style': 'mla',
+                'title': clean_title
             }
     
     def _format_chicago_citation(self, source: str, citation_num: int) -> Dict[str, Any]:
-        """Format source in Chicago style"""
+        """Format source in Chicago style with improved title extraction"""
         if source.startswith('http'):
             parsed = urlparse(source)
             domain = parsed.netloc.replace('www.', '')
+            clean_title = self._clean_source_title(domain)
             
             return {
                 'id': citation_num,
                 'source': source,
-                'formatted': f'{domain.title()}, accessed {datetime.now().strftime("%B %d, %Y")}, {source}.',
+                'formatted': f'{clean_title}, accessed {datetime.now().strftime("%B %d, %Y")}, {source}.',
                 'url': source,
                 'accessed': datetime.now().strftime('%Y-%m-%d'),
-                'style': 'chicago'
+                'style': 'chicago',
+                'title': clean_title
             }
         else:
+            clean_title = self._clean_source_title(source)
             return {
                 'id': citation_num,
                 'source': source,
-                'formatted': f'{source}, Research Data ({datetime.now().year}).',
+                'formatted': f'{clean_title}, Industry Research ({datetime.now().year}).',
                 'url': None,
                 'accessed': datetime.now().strftime('%Y-%m-%d'),
-                'style': 'chicago'
+                'style': 'chicago',
+                'title': clean_title
             }
     
     def apply_citations_to_content(self, content: str, citation_data: Dict) -> str:
