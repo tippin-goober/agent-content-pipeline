@@ -1,3 +1,124 @@
+# 🤖 AI Content Pipeline
+
+> **Production-ready multi-agent system generating SEO-optimized, research-backed articles through 8 intelligent stages**
+
+*Transform a topic into a comprehensive, cited, SEO-optimized article in under 6 minutes.*
+
+---
+
+## 🎯 What This Does
+
+This pipeline automates professional content creation by orchestrating 8 specialized AI agents:
+
+**Input:** Topic + Target audience + Word count  
+**Output:** WordPress-ready article with citations, images, fact-checking, and SEO metadata
+
+**Real Results:** 6,929 words | 83 citations | 5.5 minutes | Production-tested
+
+---
+
+## ✨ Key Capabilities
+
+- 🔬 **Real-Time Research** - Perplexity API integration for current data
+- 📚 **Working Citations** - 80+ inline citations with verified URLs
+- 🎨 **Contextual Images** - DALL-E 3 generated visuals
+- ✅ **Fact Verification** - Automated claim checking with confidence scores
+- 🎯 **SEO Optimization** - Meta tags, schema markup, keyword analysis
+- 📝 **WordPress Ready** - Complete HTML package with structured data
+- 💬 **Interactive Demo** - WebADK chat interface for presentations
+- 🔌 **API Access** - REST endpoints for programmatic integration
+
+---
+
+## 🚀 Three Ways to Run
+
+### 1. Interactive Demo (Recommended for Presentations)
+```bash
+cd webadk_demo
+./start_demo.sh
+# Access: http://localhost:8080 (demo/content2024)
+```
+
+### 2. Command Line
+```bash
+python3 pipeline_single_session.py
+# Follow interactive prompts
+```
+
+### 3. REST API
+```bash
+./run_api.sh
+# POST /generate endpoint
+```
+
+---
+
+## 🏗️ Architecture
+```
+8-Stage Multi-Agent Pipeline:
+┌─────────────┐
+│  Outline    │ → Topic structure
+├─────────────┤
+│  Research   │ → Perplexity API (real-time data)
+├─────────────┤
+│  Content    │ → Long-form article generation
+├─────────────┤
+│  Citations  │ → Inline refs + bibliography
+├─────────────┤
+│  Images     │ → DALL-E 3 visual generation
+├─────────────┤
+│ Fact-Check  │ → Claim verification
+├─────────────┤
+│    SEO      │ → Metadata + schema markup
+├─────────────┤
+│  Publish    │ → WordPress HTML package
+└─────────────┘
+```
+
+**Tech Stack:** Google ADK (Gemini) • Perplexity API • OpenAI (DALL-E 3) • FastAPI • Python 3.8+
+
+---
+
+## 📊 Example Output
+
+A single generation produces:
+- **Content:** 7,000+ word comprehensive article
+- **Citations:** 80+ inline citations with working URLs
+- **Images:** 5 contextual AI-generated images
+- **Fact-Check:** Confidence scores for major claims
+- **SEO:** Meta descriptions, keywords, schema markup
+- **Format:** WordPress-ready HTML + JSON package
+
+---
+
+## 🎯 Use Cases
+
+- **Content Marketing:** Generate in-depth blog posts and guides
+- **SEO Agencies:** Scale content production for clients
+- **Research Teams:** Automated literature synthesis
+- **Publishers:** Draft comprehensive articles with citations
+- **Portfolio Demo:** Showcase multi-agent AI architecture
+
+---
+
+## 🛣️ Roadmap
+
+- [ ] WordPress plugin for one-click publishing
+- [ ] Web UI dashboard for content review
+- [ ] Multi-language support
+- [ ] Custom citation style support (MLA, Chicago, etc.)
+- [ ] Batch processing for multiple articles
+
+---
+
+<br>
+
+---
+
+<!-- DETAILED TECHNICAL DOCUMENTATION -->
+
+<br>
+
 # 🚀 AI Content Pipeline - Phase 2
 
 A production-ready **8-stage AI content creation pipeline** featuring real-time research, professional citations, contextual image generation, and comprehensive fact-checking. Built with Google's Agent Development Kit (ADK) and powered by multiple AI services.
